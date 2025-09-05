@@ -204,7 +204,7 @@ export default function Home() {
                 size="lg"
               >
                 <QrCode className="h-5 w-5 mr-2" />
-                Scan QR Code
+                Join with QR Data
               </Button>
               <Button 
                 onClick={() => setView('join')} 
