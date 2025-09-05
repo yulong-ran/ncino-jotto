@@ -7,11 +7,13 @@ export interface P2PGameEvents {
   'game:guess': (playerId: string, guess: Guess) => void
   'game:finished': (playerId: string, finalTime: number) => void
   'game:error': (message: string) => void
+  'game:join-request': (player: Player) => void
+  'game:leave': (playerId: string) => void
 }
 
 export interface P2PMessage {
   type: keyof P2PGameEvents
-  data: any
+  data: unknown
   senderId: string
   timestamp: number
 }
@@ -25,7 +27,7 @@ const ICE_SERVERS = [
 export class WebRTCManager {
   private connections = new Map<string, RTCPeerConnection>()
   private dataChannels = new Map<string, RTCDataChannel>()
-  private eventListeners = new Map<keyof P2PGameEvents, Function[]>()
+  private eventListeners = new Map<keyof P2PGameEvents, ((...args: unknown[]) => void)[]>()
   private isHost = false
   private hostId: string | null = null
   private myId: string = this.generateId()
@@ -42,7 +44,7 @@ export class WebRTCManager {
     // Initialize event listener arrays
     const events: (keyof P2PGameEvents)[] = [
       'game:state', 'game:player-joined', 'game:player-left', 
-      'game:guess', 'game:finished', 'game:error'
+      'game:guess', 'game:finished', 'game:error', 'game:join-request', 'game:leave'
     ]
     events.forEach(event => {
       this.eventListeners.set(event, [])
@@ -126,7 +128,29 @@ export class WebRTCManager {
 
   private handleMessage(message: P2PMessage) {
     const listeners = this.eventListeners.get(message.type) || []
-    listeners.forEach(listener => listener(message.data))
+    listeners.forEach(listener => {
+      // Handle different event types with appropriate parameter unpacking
+      switch (message.type) {
+        case 'game:guess':
+          const guessData = message.data as { playerId: string; guess: Guess }
+          listener(guessData.playerId, guessData.guess)
+          break
+        case 'game:finished':
+          const finishData = message.data as { playerId: string; finalTime: number }
+          listener(finishData.playerId, finishData.finalTime)
+          break
+        case 'game:state':
+        case 'game:player-joined':
+        case 'game:join-request':
+        case 'game:error':
+        case 'game:player-left':
+        case 'game:leave':
+          listener(message.data)
+          break
+        default:
+          listener(message.data)
+      }
+    })
   }
 
   private handlePeerDisconnect(peerId: string) {
@@ -156,7 +180,7 @@ export class WebRTCManager {
   }
 
   // Handle WebRTC offer from QR code
-  private async handleWebRTCOffer(hostId: string, offerData: any) {
+  private async handleWebRTCOffer(hostId: string, offerData: { offer: RTCSessionDescriptionInit }) {
     const pc = await this.createPeerConnection(hostId)
     
     await pc.setRemoteDescription(offerData.offer)
@@ -169,7 +193,7 @@ export class WebRTCManager {
   }
 
   // Send message to all connected peers
-  broadcast(type: keyof P2PGameEvents, data: any) {
+  broadcast(type: keyof P2PGameEvents, data: unknown) {
     const message: P2PMessage = {
       type,
       data,
@@ -186,7 +210,7 @@ export class WebRTCManager {
   }
 
   // Send message to specific peer
-  send(peerId: string, type: keyof P2PGameEvents, data: any) {
+  send(peerId: string, type: keyof P2PGameEvents, data: unknown) {
     const channel = this.dataChannels.get(peerId)
     if (channel && channel.readyState === 'open') {
       const message: P2PMessage = {
@@ -202,21 +226,21 @@ export class WebRTCManager {
   // Event listener methods
   on<T extends keyof P2PGameEvents>(event: T, callback: P2PGameEvents[T]) {
     const listeners = this.eventListeners.get(event) || []
-    listeners.push(callback as Function)
+    listeners.push(callback as (...args: unknown[]) => void)
     this.eventListeners.set(event, listeners)
   }
 
   off<T extends keyof P2PGameEvents>(event: T, callback: P2PGameEvents[T]) {
     const listeners = this.eventListeners.get(event) || []
-    const index = listeners.indexOf(callback as Function)
+    const index = listeners.indexOf(callback as (...args: unknown[]) => void)
     if (index > -1) {
       listeners.splice(index, 1)
     }
   }
 
-  private emit<T extends keyof P2PGameEvents>(event: T, data: Parameters<P2PGameEvents[T]>[0]) {
+  private emit<T extends keyof P2PGameEvents>(event: T, ...args: Parameters<P2PGameEvents[T]>) {
     const listeners = this.eventListeners.get(event) || []
-    listeners.forEach(listener => listener(data))
+    listeners.forEach(listener => listener(...args))
   }
 
   // Utility methods

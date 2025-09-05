@@ -34,7 +34,6 @@ export function QRScanner({ onScanSuccess, onClose }: QRScannerProps) {
   }
 
   const handleClose = () => {
-    stopCamera()
     onClose()
   }
 

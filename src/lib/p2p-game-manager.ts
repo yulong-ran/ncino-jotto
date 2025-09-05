@@ -21,6 +21,7 @@ export class P2PGameManager {
   private setupEventListeners() {
     // Host-specific events
     webrtcManager.on('game:guess', this.handlePlayerGuess.bind(this))
+    webrtcManager.on('game:join-request', this.handleJoinRequest.bind(this))
     
     // All players receive these events
     webrtcManager.on('game:state', this.handleGameStateUpdate.bind(this))
@@ -71,33 +72,32 @@ export class P2PGameManager {
     return gameId
   }
 
-  private handlePlayerGuess(data: { playerId: string; word: string }) {
+  private handlePlayerGuess(playerId: string, guess: Guess) {
     if (!this.isHost || !this.gameState) return
 
-    const { playerId, word } = data
     const player = this.gameState.players.find(p => p.id === playerId)
     
     if (!player || player.status === 'finished') return
 
-    if (!validateWord(word)) {
+    if (!validateWord(guess.word)) {
       webrtcManager.send(playerId, 'game:error', 'Invalid word. Must be a 5-letter word.')
       return
     }
 
-    const commonLetters = calculateCommonLetters(this.gameState.hostWord, word.toUpperCase())
+    const commonLetters = calculateCommonLetters(this.gameState.hostWord, guess.word.toUpperCase())
     const timeUsed = this.gameState.startTime ? Math.floor((Date.now() - this.gameState.startTime) / 1000) : 0
 
-    const guess: Guess = {
-      word: word.toUpperCase(),
+    const processedGuess: Guess = {
+      word: guess.word.toUpperCase(),
       commonLetters,
       timestamp: Date.now()
     }
 
-    player.guesses.push(guess)
+    player.guesses.push(processedGuess)
     player.timeUsed = timeUsed
 
     // Check if the guess is correct
-    if (isWordCorrect(this.gameState.hostWord, word)) {
+    if (isWordCorrect(this.gameState.hostWord, guess.word)) {
       player.status = 'finished'
       
       // Broadcast that player finished
@@ -113,10 +113,30 @@ export class P2PGameManager {
     }
 
     // Broadcast the guess to all players
-    webrtcManager.broadcast('game:guess', { playerId, guess })
+    webrtcManager.broadcast('game:guess', { playerId, guess: processedGuess })
     
     // Send updated game state
     this.broadcastGameState()
+  }
+
+  private handleJoinRequest(player: Player) {
+    if (this.isHost && this.gameState) {
+      // Check if player name is already taken
+      const existingPlayer = this.gameState.players.find(p => p.name === player.name)
+      if (existingPlayer) {
+        webrtcManager.send(player.id, 'game:error', 'Player name already taken in this game.')
+        return
+      }
+
+      // Add player to game
+      this.gameState.players.push(player)
+      
+      // Broadcast new player joined
+      webrtcManager.broadcast('game:player-joined', player)
+      
+      // Send current game state to all players
+      this.broadcastGameState()
+    }
   }
 
   private broadcastGameState() {
@@ -152,7 +172,7 @@ export class P2PGameManager {
     await webrtcManager.joinGame(gameId, offerData)
     
     // Request to join the game
-    webrtcManager.broadcast('game:join-request', { player: newPlayer })
+    webrtcManager.broadcast('game:join-request', newPlayer)
   }
 
   makeGuess(word: string) {
@@ -160,7 +180,8 @@ export class P2PGameManager {
 
     if (this.isHost && this.gameState) {
       // Host processes their own guess
-      this.handlePlayerGuess({ playerId: this.currentPlayerId, word })
+      const guess: Guess = { word, commonLetters: 0, timestamp: Date.now() }
+      this.handlePlayerGuess(this.currentPlayerId, guess)
     } else {
       // Send guess to host
       webrtcManager.broadcast('game:guess', { playerId: this.currentPlayerId, word })
@@ -209,7 +230,7 @@ export class P2PGameManager {
     }
   }
 
-  private handlePlayerFinished({ playerId, finalTime }: { playerId: string; finalTime: number }) {
+  private handlePlayerFinished(playerId: string, finalTime: number) {
     // This is handled by the host in handlePlayerGuess
     // Non-host players just receive the notification
   }
@@ -239,7 +260,7 @@ export class P2PGameManager {
 
   leaveGame() {
     if (this.currentPlayerId) {
-      webrtcManager.broadcast('game:leave', { playerId: this.currentPlayerId })
+      webrtcManager.broadcast('game:leave', this.currentPlayerId)
     }
     
     webrtcManager.disconnect()
@@ -270,11 +291,11 @@ export class P2PGameManager {
     webrtcManager.on('game:player-left', callback)
   }
 
-  onGuess(callback: (data: { playerId: string; guess: Guess }) => void) {
+  onGuess(callback: (playerId: string, guess: Guess) => void) {
     webrtcManager.on('game:guess', callback)
   }
 
-  onPlayerFinished(callback: (data: { playerId: string; finalTime: number }) => void) {
+  onPlayerFinished(callback: (playerId: string, finalTime: number) => void) {
     webrtcManager.on('game:finished', callback)
   }
 
@@ -294,11 +315,11 @@ export class P2PGameManager {
     webrtcManager.off('game:player-left', callback)
   }
 
-  offGuess(callback: (data: { playerId: string; guess: Guess }) => void) {
+  offGuess(callback: (playerId: string, guess: Guess) => void) {
     webrtcManager.off('game:guess', callback)
   }
 
-  offPlayerFinished(callback: (data: { playerId: string; finalTime: number }) => void) {
+  offPlayerFinished(callback: (playerId: string, finalTime: number) => void) {
     webrtcManager.off('game:finished', callback)
   }
 

@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { GameBoard } from '@/components/game/game-board'
 import { Leaderboard } from '@/components/game/leaderboard'
 import { Button } from '@/components/ui/button'
@@ -11,13 +12,19 @@ import { GameInstructions } from '@/components/game/game-instructions'
 import { QRGenerator } from '@/components/qr/qr-generator'
 
 interface GamePageProps {
-  params: {
+  params: Promise<{
     gameId: string
-  }
+  }>
 }
 
 export default function GamePage({ params }: GamePageProps) {
-  const { gameId } = params
+  const [gameId, setGameId] = useState<string | null>(null)
+
+  useEffect(() => {
+    params.then(resolvedParams => {
+      setGameId(resolvedParams.gameId)
+    })
+  }, [params])
   const { toast } = useToast()
   const { 
     gameState, 
@@ -28,14 +35,16 @@ export default function GamePage({ params }: GamePageProps) {
     leaveGame,
     generateQRData,
     isHost
-  } = useP2PGame(gameId)
+  } = useP2PGame(gameId || '')
 
   const copyGameId = () => {
-    navigator.clipboard.writeText(gameId)
-    toast({
-      title: "Copied!",
-      description: "Game ID copied to clipboard"
-    })
+    if (gameId) {
+      navigator.clipboard.writeText(gameId)
+      toast({
+        title: "Copied!",
+        description: "Game ID copied to clipboard"
+      })
+    }
   }
 
   const goHome = () => {
@@ -43,7 +52,7 @@ export default function GamePage({ params }: GamePageProps) {
     window.location.href = '/'
   }
 
-  if (!gameState || !currentPlayer) {
+  if (!gameId || !gameState || !currentPlayer) {
     return (
       <div className="max-w-md mx-auto">
         <Card>

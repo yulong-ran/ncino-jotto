@@ -73,7 +73,7 @@ export function useP2PGame(gameId: string): UseP2PGameReturn {
       }
     }
 
-    const handleGuess = ({ playerId, guess }: { playerId: string; guess: Guess }) => {
+    const handleGuess = (playerId: string, guess: Guess) => {
       if (gameState && playerId !== p2pGameManager.getMyId()) {
         const player = gameState.players.find(p => p.id === playerId)
         if (player) {
@@ -85,7 +85,7 @@ export function useP2PGame(gameId: string): UseP2PGameReturn {
       }
     }
 
-    const handlePlayerFinished = ({ playerId, finalTime }: { playerId: string; finalTime: number }) => {
+    const handlePlayerFinished = (playerId: string, finalTime: number) => {
       if (gameState) {
         const player = gameState.players.find(p => p.id === playerId)
         if (player) {

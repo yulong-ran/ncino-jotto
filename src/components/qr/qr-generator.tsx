@@ -122,7 +122,7 @@ export function QRGenerator({ gameId, onGenerateQR }: QRGeneratorProps) {
         <div className="text-xs text-muted-foreground text-center space-y-1">
           <p>• Players scan the QR code to join instantly</p>
           <p>• Or manually enter the Game ID</p>
-          <p>• Make sure you're on the same WiFi network</p>
+          <p>• Make sure you&apos;re on the same WiFi network</p>
         </div>
       </CardContent>
     </Card>

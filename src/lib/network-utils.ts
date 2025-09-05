@@ -113,9 +113,13 @@ export class NetworkUtils {
     const localIP = await this.getLocalIP()
     
     // Get connection type if available
-    const nav = navigator as any
+    const nav = navigator as Navigator & {
+      connection?: { effectiveType?: string; type?: string }
+      mozConnection?: { effectiveType?: string; type?: string }
+      webkitConnection?: { effectiveType?: string; type?: string }
+    }
     const connection = nav.connection || nav.mozConnection || nav.webkitConnection
-    const connectionType = connection ? connection.effectiveType || connection.type : 'unknown'
+    const connectionType = connection ? (connection.effectiveType || connection.type || 'unknown') : 'unknown'
     
     return {
       localIP,
@@ -141,13 +145,13 @@ export class NetworkUtils {
   }
 
   // Generate a sharing URL with local network detection
-  static async generateSharingData(gameId: string, gameData: any): Promise<{
+  static async generateSharingData(gameId: string, gameData: unknown): Promise<{
     qrData: string
     shareURL: string
     localIP: string | null
   }> {
     const localIP = await this.getLocalIP()
-    const shareURL = this.generateConnectionURL(gameId, localIP)
+    const shareURL = this.generateConnectionURL(gameId, localIP || undefined)
     
     const qrData = JSON.stringify({
       gameId,
@@ -174,7 +178,9 @@ export class NetworkUtils {
   static async getWiFiNetworkName(): Promise<string | null> {
     try {
       // This is only available in some contexts and browsers
-      const nav = navigator as any
+      const nav = navigator as Navigator & {
+        connection?: { downlink?: number }
+      }
       if (nav.connection && nav.connection.downlink !== undefined) {
         // Can't actually get SSID due to privacy restrictions
         return 'WiFi Network'
