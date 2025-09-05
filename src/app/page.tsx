@@ -126,8 +126,8 @@ export default function Home() {
           return
         }
 
-        // Join via QR code data
-        await p2pGameManager.joinGame(qrData.gameId, playerName, qrData.offer || data)
+        // Join via QR code data (simplified for BroadcastChannel)
+        await p2pGameManager.joinGame(qrData.gameId, playerName)
         
         toast({
           title: "Joined Game!",

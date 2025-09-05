@@ -1,4 +1,4 @@
-import { webrtcManager } from './webrtc'
+import { broadcastManager } from './broadcast-manager'
 import { 
   GameState, 
   Player, 
@@ -20,15 +20,16 @@ export class P2PGameManager {
 
   private setupEventListeners() {
     // Host-specific events
-    webrtcManager.on('game:guess', this.handlePlayerGuess.bind(this))
-    webrtcManager.on('game:join-request', this.handleJoinRequest.bind(this))
+    broadcastManager.on('game:guess', this.handlePlayerGuess.bind(this))
+    broadcastManager.on('game:join-request', this.handleJoinRequest.bind(this))
     
     // All players receive these events
-    webrtcManager.on('game:state', this.handleGameStateUpdate.bind(this))
-    webrtcManager.on('game:player-joined', this.handlePlayerJoined.bind(this))
-    webrtcManager.on('game:player-left', this.handlePlayerLeft.bind(this))
-    webrtcManager.on('game:finished', this.handlePlayerFinished.bind(this))
-    webrtcManager.on('game:error', this.handleError.bind(this))
+    broadcastManager.on('game:state', this.handleGameStateUpdate.bind(this))
+    broadcastManager.on('game:player-joined', this.handlePlayerJoined.bind(this))
+    broadcastManager.on('game:player-left', this.handlePlayerLeft.bind(this))
+    broadcastManager.on('game:finished', this.handlePlayerFinished.bind(this))
+    broadcastManager.on('game:error', this.handleError.bind(this))
+    broadcastManager.on('game:terminated', this.handleGameTerminated.bind(this))
   }
 
   // HOST METHODS
@@ -43,7 +44,7 @@ export class P2PGameManager {
     }
 
     this.isHost = true
-    this.currentPlayerId = webrtcManager.getMyId()
+    this.currentPlayerId = broadcastManager.getMyId()
     
     const gameId = generateGameId()
     const hostPlayer: Player = {
@@ -63,8 +64,8 @@ export class P2PGameManager {
       startTime: Date.now()
     }
 
-    // Initialize WebRTC as host
-    await webrtcManager.createGame()
+    // Initialize BroadcastChannel as host
+    await broadcastManager.createGame(gameId)
     
     // Save player name for potential reconnection
     localStorage.setItem(`jotto-player-name-${gameId}`, playerName.trim())
@@ -83,7 +84,7 @@ export class P2PGameManager {
     if (!player || player.status === 'finished') return
 
     if (!validateWord(guess.word)) {
-      webrtcManager.send(playerId, 'game:error', 'Invalid word. Must be a 5-letter word.')
+      broadcastManager.send(playerId, 'game:error', 'Invalid word. Must be a 5-letter word.')
       return
     }
 
@@ -104,7 +105,7 @@ export class P2PGameManager {
       player.status = 'finished'
       
       // Broadcast that player finished
-      webrtcManager.broadcast('game:finished', { playerId, finalTime: timeUsed })
+      broadcastManager.broadcast('game:finished', { playerId, finalTime: timeUsed })
       
       // Check if all players are finished
       const activePlayers = this.gameState.players.filter(p => p.status !== 'disconnected')
@@ -116,7 +117,7 @@ export class P2PGameManager {
     }
 
     // Broadcast the guess to all players
-    webrtcManager.broadcast('game:guess', { playerId, guess: processedGuess })
+    broadcastManager.broadcast('game:guess', { playerId, guess: processedGuess })
     
     // Send updated game state
     this.broadcastGameState()
@@ -127,7 +128,7 @@ export class P2PGameManager {
       // Check if player name is already taken
       const existingPlayer = this.gameState.players.find(p => p.name === player.name)
       if (existingPlayer) {
-        webrtcManager.send(player.id, 'game:error', 'Player name already taken in this game.')
+        broadcastManager.send(player.id, 'game:error', 'Player name already taken in this game.')
         return
       }
 
@@ -135,7 +136,7 @@ export class P2PGameManager {
       this.gameState.players.push(player)
       
       // Broadcast new player joined
-      webrtcManager.broadcast('game:player-joined', player)
+      broadcastManager.broadcast('game:player-joined', player)
       
       // Send current game state to all players
       this.broadcastGameState()
@@ -149,18 +150,18 @@ export class P2PGameManager {
         ...this.gameState,
         hostWord: this.isHost ? this.gameState.hostWord : '****'
       }
-      webrtcManager.broadcast('game:state', safeGameState)
+      broadcastManager.broadcast('game:state', safeGameState)
     }
   }
 
   // PLAYER METHODS
 
-  async joinGame(gameId: string, playerName: string, offerData?: string): Promise<void> {
+  async joinGame(gameId: string, playerName: string): Promise<void> {
     if (!playerName.trim()) {
       throw new Error('Player name is required.')
     }
 
-    this.currentPlayerId = webrtcManager.getMyId()
+    this.currentPlayerId = broadcastManager.getMyId()
     
     const newPlayer: Player = {
       id: this.currentPlayerId,
@@ -171,14 +172,14 @@ export class P2PGameManager {
       joinedAt: Date.now()
     }
 
-    // Join the WebRTC network
-    await webrtcManager.joinGame(gameId, offerData)
+    // Join the BroadcastChannel network
+    await broadcastManager.joinGame(gameId)
     
     // Save player name for potential reconnection
     localStorage.setItem(`jotto-player-name-${gameId}`, playerName.trim())
     
     // Request to join the game
-    webrtcManager.broadcast('game:join-request', newPlayer)
+    broadcastManager.broadcast('game:join-request', newPlayer)
   }
 
   makeGuess(word: string) {
@@ -190,7 +191,7 @@ export class P2PGameManager {
       this.handlePlayerGuess(this.currentPlayerId, guess)
     } else {
       // Send guess to host
-      webrtcManager.broadcast('game:guess', { playerId: this.currentPlayerId, word })
+      broadcastManager.broadcast('game:guess', { playerId: this.currentPlayerId, word })
     }
   }
 
@@ -205,7 +206,7 @@ export class P2PGameManager {
       // Check if player name is already taken
       const existingPlayer = this.gameState.players.find(p => p.name === player.name)
       if (existingPlayer) {
-        webrtcManager.send(player.id, 'game:error', 'Player name already taken in this game.')
+        broadcastManager.send(player.id, 'game:error', 'Player name already taken in this game.')
         return
       }
 
@@ -220,7 +221,7 @@ export class P2PGameManager {
 
       // Broadcast updated game state
       this.broadcastGameState()
-      webrtcManager.broadcast('game:player-joined', player)
+      broadcastManager.broadcast('game:player-joined', player)
     }
   }
 
@@ -245,6 +246,21 @@ export class P2PGameManager {
     console.error('Game error:', message)
   }
 
+  private handleGameTerminated() {
+    // Host has terminated the game
+    console.log('Game terminated by host')
+    
+    // Clear game state
+    this.gameState = null
+    this.isHost = false
+    this.currentPlayerId = null
+    
+    // Redirect to home page
+    if (typeof window !== 'undefined') {
+      window.location.href = '/'
+    }
+  }
+
   // RECONNECTION METHODS
 
   isConnectedToGame(gameId: string): boolean {
@@ -256,12 +272,18 @@ export class P2PGameManager {
       return // Already connected to this game
     }
 
+    // Check if game still exists
+    const hostInfo = localStorage.getItem(`jotto-host-${gameId}`)
+    if (!hostInfo) {
+      throw new Error('Game not found. The host may have left or the game may not exist.')
+    }
+
     // If we're connected to a different game, leave it first
     if (this.gameState && this.gameState.gameId !== gameId) {
       this.leaveGame()
     }
 
-    // Try to reconnect by getting the current player's name from localStorage or prompt
+    // Try to reconnect by getting the current player's name from localStorage
     const savedPlayerName = localStorage.getItem(`jotto-player-name-${gameId}`)
     if (!savedPlayerName) {
       throw new Error('Cannot reconnect: player name not found. Please join the game manually.')
@@ -292,10 +314,10 @@ export class P2PGameManager {
 
   leaveGame() {
     if (this.currentPlayerId) {
-      webrtcManager.broadcast('game:leave', this.currentPlayerId)
+      broadcastManager.broadcast('game:leave', this.currentPlayerId)
     }
     
-    webrtcManager.disconnect()
+    broadcastManager.disconnect()
     this.gameState = null
     this.isHost = false
     this.currentPlayerId = null
@@ -303,60 +325,67 @@ export class P2PGameManager {
 
   // Generate data for QR code
   async generateQRData(): Promise<string> {
-    if (!this.isHost) {
+    if (!this.isHost || !this.gameState) {
       throw new Error('Only host can generate QR codes')
     }
     
-    return await webrtcManager.generateQRCodeData()
+    // For BroadcastChannel, QR code just contains game ID and host ID
+    const qrData = {
+      gameId: this.gameState.gameId,
+      hostId: this.currentPlayerId,
+      timestamp: Date.now()
+    }
+    
+    return JSON.stringify(qrData)
   }
 
   // Event listener methods for components
   onGameState(callback: (gameState: GameState) => void) {
-    webrtcManager.on('game:state', callback)
+    broadcastManager.on('game:state', callback)
   }
 
   onPlayerJoined(callback: (player: Player) => void) {
-    webrtcManager.on('game:player-joined', callback)
+    broadcastManager.on('game:player-joined', callback)
   }
 
   onPlayerLeft(callback: (playerId: string) => void) {
-    webrtcManager.on('game:player-left', callback)
+    broadcastManager.on('game:player-left', callback)
   }
 
   onGuess(callback: (playerId: string, guess: Guess) => void) {
-    webrtcManager.on('game:guess', callback)
+    broadcastManager.on('game:guess', callback)
   }
 
   onPlayerFinished(callback: (playerId: string, finalTime: number) => void) {
-    webrtcManager.on('game:finished', callback)
+    broadcastManager.on('game:finished', callback)
   }
 
   onError(callback: (message: string) => void) {
-    webrtcManager.on('game:error', callback)
+    broadcastManager.on('game:error', callback)
   }
 
   offGameState(callback: (gameState: GameState) => void) {
-    webrtcManager.off('game:state', callback)
+    broadcastManager.off('game:state', callback)
   }
 
   offPlayerJoined(callback: (player: Player) => void) {
-    webrtcManager.off('game:player-joined', callback)
+    broadcastManager.off('game:player-joined', callback)
   }
 
   offPlayerLeft(callback: (playerId: string) => void) {
-    webrtcManager.off('game:player-left', callback)
+    broadcastManager.off('game:player-left', callback)
   }
 
   offGuess(callback: (playerId: string, guess: Guess) => void) {
-    webrtcManager.off('game:guess', callback)
+    broadcastManager.off('game:guess', callback)
   }
 
   offPlayerFinished(callback: (playerId: string, finalTime: number) => void) {
-    webrtcManager.off('game:finished', callback)
+    broadcastManager.off('game:finished', callback)
   }
 
   offError(callback: (message: string) => void) {
-    webrtcManager.off('game:error', callback)
+    broadcastManager.off('game:error', callback)
   }
 }
 
