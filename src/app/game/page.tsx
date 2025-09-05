@@ -11,21 +11,25 @@ import { useP2PGame } from '@/hooks/use-p2p-game'
 import { GameInstructions } from '@/components/game/game-instructions'
 import { QRGenerator } from '@/components/qr/qr-generator'
 
-interface GamePageProps {
-  params: Promise<{
-    gameId: string
-  }>
-}
-
-export default function GamePage({ params }: GamePageProps) {
+export default function GamePage() {
   const [gameId, setGameId] = useState<string | null>(null)
+  const { toast } = useToast()
 
   useEffect(() => {
-    params.then(resolvedParams => {
-      setGameId(resolvedParams.gameId)
-    })
-  }, [params])
-  const { toast } = useToast()
+    // Get gameId from URL hash or query parameter
+    const urlParams = new URLSearchParams(window.location.search)
+    const hashGameId = window.location.hash.replace('#', '')
+    const queryGameId = urlParams.get('id')
+    
+    const id = hashGameId || queryGameId
+    if (id) {
+      setGameId(id)
+    } else {
+      // Redirect to home if no game ID
+      window.location.href = '/'
+    }
+  }, [])
+
   const { 
     gameState, 
     currentPlayer, 

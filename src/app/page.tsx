@@ -52,7 +52,7 @@ export default function Home() {
         description: `Game ID: ${newGameId}. Share this with other players.`
       })
       
-      router.push(`/game/${newGameId}`)
+      router.push(`/game?id=${newGameId}`)
     } catch (error) {
       console.error('Error creating game:', error)
       toast({
@@ -94,7 +94,7 @@ export default function Home() {
         description: `Successfully joined ${gameId.toUpperCase()}`
       })
       
-      router.push(`/game/${gameId.toUpperCase()}`)
+      router.push(`/game?id=${gameId.toUpperCase()}`)
     } catch (error) {
       console.error('Error joining game:', error)
       toast({
@@ -134,7 +134,7 @@ export default function Home() {
           description: `Successfully joined via QR code`
         })
         
-        router.push(`/game/${qrData.gameId}`)
+        router.push(`/game?id=${qrData.gameId}`)
       } else {
         throw new Error('Invalid QR code data')
       }
