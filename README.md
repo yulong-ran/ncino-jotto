@@ -104,13 +104,25 @@ The game implements the classic Jotto rules:
 
 ## 🚀 Deployment
 
-### Frontend (Next.js)
-Deploy to Vercel, Netlify, or any platform supporting Next.js.
+### GitHub Pages (Recommended)
+This project is configured for easy deployment to GitHub Pages:
 
-### Backend (Socket.io)
-Deploy the `server/` directory to a service like Heroku, Railway, or DigitalOcean.
+1. **Push to GitHub**: Push your code to a GitHub repository
+2. **Enable GitHub Pages**: 
+   - Go to your repo Settings → Pages
+   - Source: "GitHub Actions"  
+3. **Automatic Deployment**: The workflow will automatically deploy on every push to main branch
+4. **Access**: Your game will be available at `https://yourusername.github.io/ncino-jotto`
 
-Make sure to update the Socket.io connection URL in `src/lib/socket.ts` to point to your production server.
+### Manual Build
+```bash
+npm run build    # Creates static files in ./out
+```
+
+### Other Platforms
+- **Vercel**: Perfect for Next.js deployment
+- **Netlify**: Works great with static export
+- **Any static hosting**: Upload the `./out` folder
 
 ## 🤝 Contributing
 
