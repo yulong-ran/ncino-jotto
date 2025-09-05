@@ -21,7 +21,46 @@ export function useP2PGame(gameId: string): UseP2PGameReturn {
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [timeElapsed, setTimeElapsed] = useState(0)
+  const [connectionAttempted, setConnectionAttempted] = useState(false)
   const { toast } = useToast()
+
+  // Connection effect - handles gameId parameter
+  useEffect(() => {
+    if (!gameId || connectionAttempted) return
+
+    const attemptConnection = async () => {
+      setConnectionAttempted(true)
+      
+      try {
+        // Check if already connected to this game
+        if (p2pGameManager.isConnectedToGame(gameId)) {
+          const currentGameState = p2pGameManager.getGameState()
+          if (currentGameState) {
+            setGameState(currentGameState)
+            const playerId = p2pGameManager.getMyId()
+            if (playerId) {
+              const player = currentGameState.players.find(p => p.id === playerId)
+              if (player) {
+                setCurrentPlayer(player)
+                setIsConnected(true)
+                return
+              }
+            }
+          }
+        }
+
+        // Attempt to reconnect if we have saved player data
+        await p2pGameManager.reconnectToGame(gameId)
+        setIsConnected(true)
+      } catch (error) {
+        console.error('Failed to connect to game:', error)
+        // Don't show toast error here - the game page will handle it
+        setIsConnected(false)
+      }
+    }
+
+    attemptConnection()
+  }, [gameId, connectionAttempted, toast])
 
   // Timer effect
   useEffect(() => {
@@ -47,7 +86,15 @@ export function useP2PGame(gameId: string): UseP2PGameReturn {
         const player = newGameState.players.find(p => p.id === playerId)
         if (player) {
           setCurrentPlayer(player)
+        } else {
+          // Player not found in game state - connection issue
+          setIsConnected(false)
+          return
         }
+      } else {
+        // No player ID - connection issue
+        setIsConnected(false)
+        return
       }
       
       // Update connection status

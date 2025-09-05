@@ -66,6 +66,9 @@ export class P2PGameManager {
     // Initialize WebRTC as host
     await webrtcManager.createGame()
     
+    // Save player name for potential reconnection
+    localStorage.setItem(`jotto-player-name-${gameId}`, playerName.trim())
+    
     // Broadcast initial game state
     this.broadcastGameState()
     
@@ -171,6 +174,9 @@ export class P2PGameManager {
     // Join the WebRTC network
     await webrtcManager.joinGame(gameId, offerData)
     
+    // Save player name for potential reconnection
+    localStorage.setItem(`jotto-player-name-${gameId}`, playerName.trim())
+    
     // Request to join the game
     webrtcManager.broadcast('game:join-request', newPlayer)
   }
@@ -237,6 +243,32 @@ export class P2PGameManager {
 
   private handleError(message: string) {
     console.error('Game error:', message)
+  }
+
+  // RECONNECTION METHODS
+
+  isConnectedToGame(gameId: string): boolean {
+    return this.gameState?.gameId === gameId && this.currentPlayerId !== null
+  }
+
+  async reconnectToGame(gameId: string): Promise<void> {
+    if (this.isConnectedToGame(gameId)) {
+      return // Already connected to this game
+    }
+
+    // If we're connected to a different game, leave it first
+    if (this.gameState && this.gameState.gameId !== gameId) {
+      this.leaveGame()
+    }
+
+    // Try to reconnect by getting the current player's name from localStorage or prompt
+    const savedPlayerName = localStorage.getItem(`jotto-player-name-${gameId}`)
+    if (!savedPlayerName) {
+      throw new Error('Cannot reconnect: player name not found. Please join the game manually.')
+    }
+
+    // Attempt to rejoin the game
+    await this.joinGame(gameId, savedPlayerName)
   }
 
   // UTILITY METHODS

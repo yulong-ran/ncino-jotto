@@ -13,6 +13,7 @@ import { QRGenerator } from '@/components/qr/qr-generator'
 
 export default function GamePage() {
   const [gameId, setGameId] = useState<string | null>(null)
+  const [connectionError, setConnectionError] = useState<string | null>(null)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -41,6 +42,24 @@ export default function GamePage() {
     isHost
   } = useP2PGame(gameId || '')
 
+  // Monitor connection state and show errors after timeout
+  useEffect(() => {
+    if (!gameId) return
+
+    const timeout = setTimeout(() => {
+      if (!gameState && !currentPlayer && !isConnected) {
+        setConnectionError('Unable to connect to game. The game may no longer exist or you may need to join manually.')
+      }
+    }, 10000) // 10 second timeout
+
+    if (gameState && currentPlayer) {
+      setConnectionError(null)
+      clearTimeout(timeout)
+    }
+
+    return () => clearTimeout(timeout)
+  }, [gameId, gameState, currentPlayer, isConnected])
+
   const copyGameId = () => {
     if (gameId) {
       navigator.clipboard.writeText(gameId)
@@ -56,7 +75,50 @@ export default function GamePage() {
     window.location.href = '/'
   }
 
-  if (!gameId || !gameState || !currentPlayer) {
+  const retryConnection = () => {
+    setConnectionError(null)
+    window.location.reload()
+  }
+
+  if (!gameId) {
+    return (
+      <div className="max-w-md mx-auto">
+        <Card>
+          <CardContent className="flex items-center justify-center py-8">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p>Loading...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (connectionError) {
+    return (
+      <div className="max-w-md mx-auto">
+        <Card className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
+          <CardHeader>
+            <CardTitle className="text-red-800 dark:text-red-200">Connection Failed</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-red-700 dark:text-red-300">{connectionError}</p>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={retryConnection} className="flex-1">
+                Retry
+              </Button>
+              <Button variant="outline" onClick={goHome} className="flex-1">
+                Go Home
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!gameState || !currentPlayer) {
     return (
       <div className="max-w-md mx-auto">
         <Card>
